@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cascade Hideaway — Inventory & Ops Hub (Final v2)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            cormorant: ['Cormorant Garamond', 'serif'],
+            raleway: ['Raleway', 'ui-sans-serif', 'system-ui'],
+            inter: ['Inter', 'ui-sans-serif', 'system-ui']
+          },
+          colors: {
+            bronze: { 50:'#fbf8f3',100:'#f5efe3',200:'#e9dcc4',300:'#d9c3a0',400:'#c8a87d',500:'#8C6D46',600:'#6f5636',700:'#5A452B',800:'#463622',900:'#35291a' },
+            cream: { 50:'#FFFEF9', 100:'#F8F5EE', 200:'#F5F1E8' },
+            taupe: { 200:'#E4D9C9', 300:'#D7CBB9', 400:'#B0A18F' },
+            forest: { 500:'#345c51', 600:'#2A4B41' },
+            warn: '#D97706', danger:'#B91C1C'
+          },
+          boxShadow: { soft: '0 10px 25px -10px rgba(0,0,0,.15)' }
+        }
+      }
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Raleway:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.0/Sortable.min.js"></script>
+  <style>
+    :root{ --chip-ok:#16a34a; --chip-low:#b45309; --chip-need:#b91c1c; --bg:#F5F1E8; }
+    body{ background:var(--bg); font-family: 'Raleway', system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#2C2525; }
+    .view{ display:none }
+    .view.active{ display:block }
+    .chip{ display:inline-flex; align-items:center; gap:.4rem; padding:.2rem .6rem; border-radius:999px; font-size:.72rem; font-weight:700; border:1px solid currentColor }
+    .chip-ok{ color:var(--chip-ok); background:#dcfce7 }
+    .chip-low{ color:var(--chip-low); background:#fff7ed }
+    .chip-need{ color:var(--chip-need); background:#fee2e2 }
+    .tbl thead th{ background:rgba(200,168,125,.15); color:#5A452B; }
+    .tbl tbody tr:nth-child(even){ background:rgba(255,255,255,.8) }
+    .tbl tbody tr:nth-child(odd){ background:rgba(248,245,238,.8) }
+    .tbl td, .tbl th{ border-bottom:1px solid rgba(176,161,143,.6) }
+    .lockscreen::backdrop{ background:rgba(0,0,0,.5); backdrop-filter: blur(4px); }
+    .highlight-row { animation: highlight 2s ease-out; }
+    @keyframes highlight { 0% { background-color: #fef3c7; } 100% { background-color: transparent; } }
+    .sortable-ghost { background: #e9dcc4; opacity: 0.7; }
+    .sortable-chosen { cursor: grabbing; }
+    .drag-handle { cursor: move; color: #b0a18f; touch-action: none; }
+    .drag-handle:hover { color: #5A452B; }
+    #toggle-inactivity-alert:checked ~ .dot { transform: translateX(100%); }
+    #toggle-inactivity-alert:checked ~ .block { background-color: #2A4B41; }
+  </style>
+</head>
+<body class="antialiased">
+  <!-- Loader -->
+  <div id="loader" class="fixed inset-0 bg-[rgba(245,241,232,.92)] backdrop-blur-sm z-50 flex items-center justify-center">
+    <div class="text-center">
+      <h2 class="text-2xl md:text-3xl font-cormorant text-bronze-800 mb-3">Loading…</h2>
+      <div class="w-12 h-12 border-4 border-bronze-300 border-t-bronze-700 rounded-full animate-spin mx-auto"></div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="sticky top-0 z-30 bg-cream-50/90 backdrop-blur border-b border-taupe-300">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="p-2 rounded-lg bg-bronze-700 text-cream-50 shadow-soft">📦</div>
+        <div>
+          <h1 class="text-2xl md:text-3xl font-cormorant font-bold text-bronze-800 leading-tight">Cascade Hideaway</h1>
+          <p class="text-xs md:text-sm text-bronze-700/80">Inventory & Operations Hub</p>
+        </div>
+      </div>
+      <div id="editor-status" class="text-xs font-bold text-bronze-700/80 hidden items-center gap-2"></div>
+    </div>
+    <nav class="max-w-7xl mx-auto px-4 pb-2 flex flex-wrap gap-x-6 text-[0.95rem]">
+      <button data-view="dashboard" class="navtab pb-2 border-b-2 border-bronze-700 text-bronze-800">🏠 Dashboard</button>
+      <button data-view="inventory" class="navtab pb-2 border-b-2 border-transparent text-bronze-800">🛋️ Inventory</button>
+      <button data-view="consumables" class="navtab pb-2 border-b-2 border-transparent text-bronze-800">🧴 Consumables</button>
+      <button data-view="purchases" class="navtab pb-2 border-b-2 border-transparent text-bronze-800">🧾 Purchases</button>
+      <button data-view="analytics" class="navtab pb-2 border-b-2 border-transparent text-bronze-800">📊 Analytics</button>
+      <button id="nav-settings" data-view="settings" class="navtab pb-2 border-b-2 border-transparent text-bronze-800">⚙️ Settings</button>
+    </nav>
+  </header>
+
+  <!-- Main -->
+  <main id="main-content" class="max-w-7xl mx-auto px-4 py-6 space-y-8">
+    <!-- DASHBOARD: notifications -->
+    <section id="view-dashboard" class="view active">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+        <div class="bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+          <p class="text-sm text-bronze-700/80">💰 Total Consumables Value</p>
+          <p id="metric-total-value" class="text-4xl font-bold text-bronze-800">₱0.00</p>
+          <p class="text-xs text-bronze-700/70 mt-1">Unit cost × Initial stock</p>
+        </div>
+        <div class="bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+          <p class="text-sm text-bronze-700/80">📈 Projected Cost (30 Days)</p>
+          <p id="metric-projected" class="text-4xl font-bold text-bronze-800">₱0.00</p>
+          <p class="text-xs text-bronze-700/70 mt-1">Avg. per booking × 15</p>
+        </div>
+        <button id="btn-metric-attention" class="bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft text-left hover:bg-bronze-50 transition-colors">
+          <p class="text-sm text-bronze-700/80">⚠️ Items Needing Attention</p>
+          <p id="metric-attention" class="text-4xl font-bold text-bronze-800">0</p>
+          <p class="text-xs text-bronze-700/70 mt-1">Low stock & damaged items</p>
+        </button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-4">
+        <div class="lg:col-span-2 bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+          <h3 class="font-semibold text-bronze-800 mb-3">🔔 Low‑Stock Notifications</h3>
+          <div id="alerts" class="space-y-3"></div>
+        </div>
+        <div class="bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+          <h3 class="font-semibold text-bronze-800 mb-2">📅 Upcoming Bookings (Next 7 Days)</h3>
+          <div id="upcoming" class="text-sm text-bronze-800/80 space-y-2">Loading bookings...</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- INVENTORY -->
+    <section id="view-inventory" class="view">
+      <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <h2 class="text-2xl font-cormorant text-bronze-800 font-bold">🛋️ Inventory</h2>
+        <div class="flex items-center gap-2">
+          <input id="inv-search" placeholder="Search…" class="px-3 py-2 rounded-lg border border-taupe-300 bg-white/80" />
+          <select id="inv-sort" class="px-3 py-2 rounded-lg border border-taupe-300 bg-white/80">
+            <option value="freq">By Replacement Frequency</option>
+            <option value="alpha">Alphabetical</option>
+          </select>
+          <button id="btn-auth-inv" class="px-3 py-2 text-sm rounded-md border border-taupe-300 bg-white/80 transition-colors whitespace-nowrap">🔒 Unlock Edit</button>
+        </div>
+      </div>
+      <div id="inventory-container" class="space-y-6"></div>
+      <div class="mt-4">
+        <button id="btn-add-inventory" class="px-3 py-2 text-sm rounded-md border border-taupe-300 bg-white/80">➕ Add New Inventory Item</button>
+      </div>
+      <p class="text-xs text-bronze-800/70 mt-3">Frequency: ♻️ Frequent • 🗓️ Occasional • 🧱 Rare.</p>
+    </section>
+
+    <!-- CONSUMABLES -->
+    <section id="view-consumables" class="view">
+        <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h2 class="text-2xl font-cormorant text-bronze-800 font-bold">🧴 Consumables</h2>
+            <button id="btn-auth-con" class="px-3 py-2 text-sm rounded-md border border-taupe-300 bg-white/80 transition-colors whitespace-nowrap">🔒 Unlock Edit</button>
+        </div>
+      <div class="bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+        <div class="overflow-x-auto">
+          <table class="tbl w-full text-sm" aria-label="Consumables table">
+            <thead>
+              <tr>
+                <th class="p-3 w-8"></th>
+                <th class="p-3 text-left">Item</th>
+                <th class="p-3 text-right">Unit ₱</th>
+                <th class="p-3 text-center">Last Count</th>
+                <th class="p-3 text-center">Threshold</th>
+                <th class="p-3 text-center">Current ROB</th>
+                <th class="p-3 text-center">Calculated ROB</th>
+                <th class="p-3 text-center">Δ</th>
+                <th class="p-3 text-center">Status</th>
+                <th class="p-3 text-center w-12"></th>
+              </tr>
+            </thead>
+            <tbody id="consumables-body" class="sortable-con-body"></tbody>
+          </table>
+        </div>
+      </div>
+       <div class="mt-4">
+        <button id="btn-add-consumable" class="px-3 py-2 text-sm rounded-md border border-taupe-300 bg-white/80">➕ Add New Consumable Item</button>
+      </div>
+      <div class="mt-3 text-xs text-bronze-800/70">Calculated ROB = Initial + Purchases − Logged Consumption. Δ = Current − Calculated.</div>
+    </section>
+
+    <!-- PURCHASES -->
+    <section id="view-purchases" class="view">
+      <h2 class="text-2xl font-cormorant text-bronze-800 font-bold mb-2">🧾 Purchases</h2>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div class="lg:col-span-2 bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+          <form id="purchase-form" class="space-y-3">
+            <div id="purchase-rows" class="space-y-3"></div>
+            <div class="flex items-center justify-between flex-wrap gap-2">
+              <button type="button" id="add-purchase-row" class="px-3 py-2 rounded-md border border-taupe-300">➕ Add Item</button>
+              <div class="flex items-center gap-2 flex-wrap">
+                <label class="text-sm">Date</label>
+                <input id="purchase-date" type="date" class="p-2 border border-taupe-300 rounded-md" required />
+                <button class="px-4 py-2 rounded-md bg-forest-600 text-cream-50">Save Purchase Batch</button>
+              </div>
+            </div>
+          </form>
+        </div>
+        <div class="bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+          <h3 class="font-semibold text-bronze-800 mb-2">Recent Purchases</h3>
+          <div id="purchases-log" class="space-y-2 max-h-[460px] overflow-y-auto"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ANALYTICS -->
+    <section id="view-analytics" class="view">
+        <h2 class="text-2xl font-cormorant text-bronze-800 font-bold mb-2">📊 Analytics & Insights</h2>
+        <div class="space-y-6">
+            <div class="bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+                <h3 class="font-semibold text-bronze-800 mb-2">🔑 Key Performance Metrics</h3>
+                <div id="kpi-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                 <div class="bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+                    <h3 class="font-semibold text-bronze-800 mb-2">Latest Cost per Item</h3>
+                    <div class="h-80"><canvas id="chart-latest-cost"></canvas></div>
+                </div>
+                <div class="bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+                    <h3 class="font-semibold text-bronze-800 mb-2">Supplier Cost Comparison (Average)</h3>
+                    <div class="h-80"><canvas id="chart-supplier-comparison"></canvas></div>
+                </div>
+            </div>
+             <div class="bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+                <h3 class="font-semibold text-bronze-800 mb-2">Consumable Stock Levels</h3>
+                <div class="h-96"><canvas id="chart-stock-levels"></canvas></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="view-settings" class="view">
+        <div class="space-y-6">
+            <div class="max-w-2xl bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+                <h3 class="font-semibold text-bronze-800 mb-3">⚙️ Application Settings</h3>
+                <form id="form-settings" class="space-y-4">
+                  <div>
+                    <label for="set-sheet" class="text-sm">Google Sheet ID</label>
+                    <input id="set-sheet" class="w-full p-2 border border-taupe-300 rounded-md" required />
+                  </div>
+                  <div>
+                    <label for="set-cal" class="text-sm">Google Calendar ID</label>
+                    <input id="set-cal" class="w-full p-2 border border-taupe-300 rounded-md" required />
+                  </div>
+                   <div>
+                    <label for="set-ocr" class="text-sm">API / OCR Key</label>
+                    <input id="set-ocr" class="w-full p-2 border border-taupe-300 rounded-md" placeholder="Google API Key" />
+                  </div>
+                  <button class="w-full px-4 py-2 rounded-lg bg-forest-600 text-cream-50">Save Core Settings</button>
+                </form>
+            </div>
+
+            <div class="max-w-2xl bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+                <h3 class="font-semibold text-bronze-800 mb-3">🔗 Data & Automation</h3>
+                <div class="space-y-4">
+                    <div class="p-3 bg-white/60 rounded-lg">
+                        <label class="font-medium text-bronze-800">Google Drive Sync</label>
+                        <p class="text-xs text-bronze-700/80 mb-2">Sync all data to a folder in your Google Drive for backup.</p>
+                        <button id="btn-drive-sync" class="px-3 py-1.5 text-sm rounded-md border border-taupe-300 bg-white/80 transition-colors">Sync Now</button>
+                        <span id="drive-sync-status" class="ml-2 text-xs font-medium"></span>
+                    </div>
+                    <div class="p-3 bg-white/60 rounded-lg">
+                        <div class="flex items-center justify-between">
+                             <div>
+                                <span class="font-medium text-bronze-800">Weekly Automation</span>
+                                <p class="text-xs text-bronze-700/80">If bookings exist and no updates are made for 7 days, send an **Inactivity Alert**.<br>Separately, send a **Weekly Summary Report** every Monday.</p>
+                            </div>
+                            <label for="toggle-inactivity-alert" class="flex items-center cursor-pointer">
+                                <div class="relative">
+                                    <input type="checkbox" id="toggle-inactivity-alert" class="sr-only">
+                                    <div class="block bg-gray-600 w-14 h-8 rounded-full"></div>
+                                    <div class="dot absolute left-1 top-1 bg-white w-6 h-6 rounded-full transition"></div>
+                                </div>
+                            </label>
+                        </div>
+                         <input id="set-email" type="email" class="w-full mt-2 p-2 border border-taupe-300 rounded-md text-sm" placeholder="Notification Email" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="max-w-2xl bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+                <h3 class="font-semibold text-bronze-800 mb-3">👥 User Management</h3>
+                <div id="user-list" class="space-y-2 mb-3"></div>
+                <form id="form-add-user" class="flex items-center gap-2">
+                    <input id="new-user-name" class="w-full p-2 border border-taupe-300 rounded-md" placeholder="Add new user name" required />
+                    <button type="submit" class="px-4 py-2 rounded-lg bg-bronze-700 text-cream-50 whitespace-nowrap">Add User</button>
+                </form>
+            </div>
+              
+            <div class="bg-cream-50 border border-taupe-300 p-5 rounded-xl shadow-soft">
+                <h3 class="font-semibold text-bronze-800 mb-3">📝 Edit Log</h3>
+                <div class="overflow-x-auto max-h-96">
+                    <table class="tbl w-full text-sm">
+                        <thead>
+                            <tr>
+                                <th class="p-2 text-left">Timestamp</th>
+                                <th class="p-2 text-left">User</th>
+                                <th class="p-2 text-left">Item</th>
+                                <th class="p-2 text-left">Change Made</th>
+                            </tr>
+                        </thead>
+                        <tbody id="edit-log-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+  </main>
+
+  <!-- Modals -->
+  <dialog id="auth-modal" class="lockscreen rounded-xl p-0 w-[92%] max-w-md">
+    <div class="bg-cream-50 border border-taupe-300 rounded-xl overflow-hidden">
+      <div class="p-4 border-b border-taupe-300 flex items-center justify-between">
+        <h4 id="auth-title" class="font-semibold">🔐 Enter Credentials</h4>
+        <button id="auth-close" class="px-2 py-1 text-sm">✖</button>
+      </div>
+      <form id="auth-form" class="p-4 space-y-3">
+        <div>
+            <label for="auth-user" class="text-sm">User</label>
+            <select id="auth-user" class="w-full p-2 border border-taupe-300 rounded-md"></select>
+        </div>
+        <div id="auth-password-field" class="hidden">
+             <label for="auth-password" class="text-sm">Admin Password</label>
+             <input id="auth-password" type="password" class="w-full p-2 border border-taupe-300 rounded-md" />
+        </div>
+        <div class="flex items-center justify-end gap-2">
+          <button type="submit" class="px-4 py-2 rounded-md bg-forest-600 text-cream-50">Login</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog id="add-item-modal" class="lockscreen rounded-xl p-0 w-[92%] max-w-lg">
+    <div class="bg-cream-50 border border-taupe-300 rounded-xl overflow-hidden">
+        <div class="p-4 border-b border-taupe-300 flex items-center justify-between">
+            <h4 id="add-item-title" class="font-semibold">Add New Item</h4>
+            <button id="add-item-close" class="px-2 py-1 text-sm">✖</button>
+        </div>
+        <form id="add-item-form" class="p-4 space-y-3">
+            <div id="add-item-fields"></div>
+            <div class="flex items-center justify-end gap-2">
+                <button type="submit" class="px-4 py-2 rounded-md bg-forest-600 text-cream-50">Save Item</button>
+            </div>
+        </form>
+    </div>
+</dialog>
+
+  <div id="toast" class="fixed bottom-5 right-5 z-50 opacity-0 transition-opacity duration-300"></div>
+
+  <script>
+    function nvl(){ for(var i=0;i<arguments.length;i++){ var v=arguments[i]; if(v!==null && v!==undefined) return v; } return undefined; }
+    function hasRunApi(){ return !!(window.google && google.script && google.script.run); }
+    if (!hasRunApi()) {
+      console.warn('Mocking google.script.run for local preview');
+      window.google = { script: { run: { _ok:null, _err:null,
+        withSuccessHandler:function(cb){ this._ok=cb; return this }, withFailureHandler:function(cb){ this._err=cb; return this },
+        getInitialData:function(){ var demo = window.__demoData(); var self=this; setTimeout(function(){ self._ok(demo) }, 300) },
+        getUpcomingBookings:function(){ var self=this; setTimeout(() => self._ok([{title:'Guest A', start:'2025-10-18', end:'2025-10-20'}, {title:'Guest B', start:'2025-10-21', end:'2025-10-22'}]), 500); },
+        saveSettings:function(s){ var self=this; setTimeout(function(){ self._ok(s) }, 300) }, 
+        logEdit:function(l){ var self=this; setTimeout(function(){ self._ok(l) }, 100) }, 
+        updateUsers:function(u){ var self=this; setTimeout(function(){ self._ok(u) }, 100) },
+        upsertItem:function(item){ var self=this; setTimeout(function(){ self._ok(item) }, 200) },
+        removeItem:function(id,type){ var self=this; setTimeout(function(){ self._ok({id:id, type:type}) }, 200) },
+        updateOrder:function(type, order){ var self=this; setTimeout(function(){ self._ok({type:type, order:order}) }, 200) },
+        saveAutomationSettings: function(s) { var self=this; setTimeout(function(){ self._ok(s) }, 200) },
+        triggerDriveSync: function() { var self=this; setTimeout(function(){ self._ok("Sync successful") }, 1500) }
+      } } };
+    }
+
+    // --- Demo seeds ---
+    window.__demoData = function(){ return ({
+      settings:{ 
+          SPREADSHEET_ID:'1wyDQ2Ql0HHXZN8fpGeLJOi_wsOlOjZul-OGaRx7Jp1k', 
+          CALENDAR_ID:'b0td47is151oejhkt9hctj5gdifrrdts@import.calendar.google.com', 
+          NOTIFICATION_EMAIL:'cascadereservations@gmail.com', 
+          OCR_KEY:'AIzaSyC8Jih-RZVdBIzmR7USXChrgnsNzaivcjo', 
+          DRIVE_FOLDER_ID: '1nVN6ro-4xjPH3_AaCIDW4JrPpwVBRgwe',
+          AUTOMATION_INACTIVITY_ALERT: true 
+      },
+      users: ['Marifel', 'Honey', 'Lloyd', 'Others'],
+      editLog: [ { ts: '2025-10-17T16:20:00Z', user: 'Marifel', item: 'Comforter (Q)', change: 'Status changed to Damaged' } ],
+      inventory:[ {"ItemID":"inv-wooden-wardrobe","ItemName":"Wooden Wardrobe","Category":"Bedroom / Sleeping Area","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-bed-q-","ItemName":"Bed (Q)","Category":"Bedroom / Sleeping Area","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-quilted-mattress-protector-q-","ItemName":"Quilted Mattress Protector (Q)","Category":"Bedroom / Sleeping Area","Quantity":2,"Status":"Good","ReplaceFreq":"♻️ Frequent"}, {"ItemID":"inv-fitted-sheet-q-","ItemName":"Fitted Sheet (Q)","Category":"Bedroom / Sleeping Area","Quantity":3,"Status":"Good","ReplaceFreq":"♻️ Frequent"}, {"ItemID":"inv-fitted-sheet-s-","ItemName":"Fitted Sheet (S)","Category":"Bedroom / Sleeping Area","Quantity":2,"Status":"Good","ReplaceFreq":"♻️ Frequent"}, {"ItemID":"inv-duvet-cover-q-","ItemName":"Duvet Cover (Q)","Category":"Bedroom / Sleeping Area","Quantity":3,"Status":"Good","ReplaceFreq":"♻️ Frequent"}, {"ItemID":"inv-comforter-q-","ItemName":"Comforter (Q)","Category":"Bedroom / Sleeping Area","Quantity":1,"Status":"Damaged","ReplaceFreq":"🗓️ Occasional"}, {"ItemID":"inv-bath-towel","ItemName":"Bath Towel","Category":"Bedroom / Sleeping Area","Quantity":6,"Status":"Good","ReplaceFreq":"♻️ Frequent"}, {"ItemID":"inv-square-pillow-big-","ItemName":"Square Pillow (Big)","Category":"Bedroom / Sleeping Area","Quantity":2,"Status":"Good","ReplaceFreq":"🗓️ Occasional"}, {"ItemID":"inv-pillow-case-1","ItemName":"Pillow Case (Square)","Category":"Bedroom / Sleeping Area","Quantity":2,"Status":"Good","ReplaceFreq":"♻️ Frequent"}, {"ItemID":"inv-rectangular-pillow","ItemName":"Rectangular Pillow","Category":"Bedroom / Sleeping Area","Quantity":4,"Status":"Good","ReplaceFreq":"🗓️ Occasional"}, {"ItemID":"inv-pillow-protector","ItemName":"Pillow Protector","Category":"Bedroom / Sleeping Area","Quantity":4,"Status":"Good","ReplaceFreq":"♻️ Frequent"}, {"ItemID":"inv-pillow-case-2","ItemName":"Pillow Case (Rect)","Category":"Bedroom / Sleeping Area","Quantity":8,"Status":"Good","ReplaceFreq":"♻️ Frequent"}, {"ItemID":"inv-sofa-bed-with-mattress","ItemName":"Sofa Bed with mattress","Category":"Living Area","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-center-table","ItemName":"Center Table","Category":"Living Area","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-sofa-cover","ItemName":"Sofa Cover","Category":"Living Area","Quantity":1,"Status":"Good","ReplaceFreq":"♻️ Frequent"}, {"ItemID":"inv-throw-pillow","ItemName":"Throw Pillow","Category":"Living Area","Quantity":3,"Status":"Good","ReplaceFreq":"🗓️ Occasional"}, {"ItemID":"inv-throw-pillowcase","ItemName":"Throw Pillowcase","Category":"Living Area","Quantity":3,"Status":"Good","ReplaceFreq":"♻️ Frequent"}, {"ItemID":"inv-lampshade","ItemName":"Lampshade","Category":"Living Area","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-refrigerator-fujidenzo-","ItemName":"Refrigerator (Fujidenzo)","Category":"Kitchen & Dining","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-microwave-fujidenzo-","ItemName":"Microwave (Fujidenzo)","Category":"Kitchen & Dining","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-rice-cooker-dowell-","ItemName":"Rice Cooker (Dowell)","Category":"Kitchen & Dining","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-induction-cooker-hanabishi-","ItemName":"Induction Cooker (Hanabishi)","Category":"Kitchen & Dining","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-heater-heatek-","ItemName":"Heater (Heatek)","Category":"Kitchen & Dining","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-bar-counter-table","ItemName":"Bar / Counter Table","Category":"Kitchen & Dining","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-chair-white-","ItemName":"Chair (White)","Category":"Kitchen & Dining","Quantity":3,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-frying-pan-ikea-","ItemName":"Frying Pan (Ikea)","Category":"Kitchen & Dining","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-casserole","ItemName":"Casserole","Category":"Kitchen & Dining","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-sauce-pan-ikea-","ItemName":"Sauce Pan (Ikea)","Category":"Kitchen & Dining","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-dish-rack-with-cover","ItemName":"Dish Rack with cover","Category":"Kitchen & Dining","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-drainer-dish-cabinet-without-cover","ItemName":"Drainer dish cabinet without cover","Category":"Kitchen & Dining","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-can-opener","ItemName":"Can Opener","Category":"Kitchen & Dining","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-spoon","ItemName":"Spoon","Category":"Kitchen & Dining","Quantity":6,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-knife","ItemName":"Knife","Category":"Kitchen & Dining","Quantity":2,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-fork","ItemName":"Fork","Category":"Kitchen & Dining","Quantity":6,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-teaspoon","ItemName":"Teaspoon","Category":"Kitchen & Dining","Quantity":6,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-highball-glass","ItemName":"Highball Glass","Category":"Kitchen & Dining","Quantity":4,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-wine-glass","ItemName":"Wine Glass","Category":"Kitchen & Dining","Quantity":6,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-plate","ItemName":"Plate","Category":"Kitchen & Dining","Quantity":4,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-soup-bowl","ItemName":"Soup Bowl","Category":"Kitchen & Dining","Quantity":2,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-ladle","ItemName":"Ladle","Category":"Kitchen & Dining","Quantity":4,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-mug-white-","ItemName":"Mug (White)","Category":"Kitchen & Dining","Quantity":4,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-mug-colored-","ItemName":"Mug (Colored)","Category":"Kitchen & Dining","Quantity":2,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-washing-machine-panasonic-","ItemName":"Washing Machine (Panasonic)","Category":"Utility / Cleaning / Bathroom","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-handsoap-container","ItemName":"Handsoap Container","Category":"Utility / Cleaning / Bathroom","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-dishwashing-container","ItemName":"Dishwashing Container","Category":"Utility / Cleaning / Bathroom","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-trash-bin","ItemName":"Trash Bin","Category":"Utility / Cleaning / Bathroom","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-clothes-drying-rack","ItemName":"Clothes Drying Rack","Category":"Utility / Cleaning / Bathroom","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-hanger","ItemName":"Hanger","Category":"Utility / Cleaning / Bathroom","Quantity":20,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-pail","ItemName":"Pail","Category":"Utility / Cleaning / Bathroom","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-dipper","ItemName":"Dipper","Category":"Utility / Cleaning / Bathroom","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-plastic-basin","ItemName":"Plastic Basin","Category":"Utility / Cleaning / Bathroom","Quantity":1,"Status":"Good","ReplaceFreq":"🧱 Rare"}, {"ItemID":"inv-floor-mat","ItemName":"Floor mat","Category":"Utility / Cleaning / Bathroom","Quantity":2,"Status":"Good","ReplaceFreq":"🗓️ Occasional"}, {"ItemID":"inv-bath-rug","ItemName":"Bath rug","Category":"Utility / Cleaning / Bathroom","Quantity":2,"Status":"Good","ReplaceFreq":"🗓️ Occasional"} ],
+      consumables:[ {"ItemID":"con-3-in-1-coffee","ItemName":"3-in-1 Coffee", "Category":"Pantry", "UnitCost":18,"InitialStock":100,"CurrentROB":15,"ConsumptionPerBooking":2,"ReorderThreshold":20,"LastCount":15,"PurchasesYTD":[{"date":"2025-01-10","qty":50,"cost":900}]}, {"ItemID":"con-bottled-water","ItemName":"Bottled Water", "Category":"Pantry", "UnitCost":20,"InitialStock":50,"CurrentROB":5,"ConsumptionPerBooking":2,"ReorderThreshold":10,"LastCount":5,"PurchasesYTD":[{"date":"2025-03-02","qty":24,"cost":480}]}, {"ItemID":"con-tea","ItemName":"Tea", "Category":"Pantry", "UnitCost":16,"InitialStock":50,"CurrentROB":50,"ConsumptionPerBooking":2,"ReorderThreshold":10,"LastCount":50,"PurchasesYTD":[]}, {"ItemID":"con-coffee-sticks-sugar-creamer-","ItemName":"Coffee sticks (sugar/creamer)","Category":"Pantry", "UnitCost":8,"InitialStock":50,"CurrentROB":50,"ConsumptionPerBooking":2,"ReorderThreshold":10,"LastCount":50,"PurchasesYTD":[]}, {"ItemID":"con-liquid-body-soap-dove-","ItemName":"Liquid Body Soap (Dove)","Category":"Toiletries", "UnitCost":7,"InitialStock":50,"CurrentROB":50,"ConsumptionPerBooking":2,"ReorderThreshold":10,"LastCount":50,"PurchasesYTD":[]}, {"ItemID":"con-liquid-hand-soap-safeguard-","ItemName":"Liquid Hand Soap (Safeguard)","Category":"Toiletries", "UnitCost":6,"InitialStock":50,"CurrentROB":50,"ConsumptionPerBooking":2,"ReorderThreshold":10,"LastCount":50,"PurchasesYTD":[]}, {"ItemID":"con-shampoo-palmolive-","ItemName":"Shampoo (Palmolive)","Category":"Toiletries", "UnitCost":6.1,"InitialStock":50,"CurrentROB":50,"ConsumptionPerBooking":2,"ReorderThreshold":10,"LastCount":50,"PurchasesYTD":[]}, {"ItemID":"con-dishwashing-liquid-joy-","ItemName":"Dishwashing Liquid (Joy)","Category":"Cleaning", "UnitCost":2.4,"InitialStock":50,"CurrentROB":50,"ConsumptionPerBooking":2,"ReorderThreshold":10,"LastCount":50,"PurchasesYTD":[]}, {"ItemID":"con-toiletries-toothbrush-toothpaste-soap-","ItemName":"Toiletries (toothbrush, toothpaste, soap)","Category":"Toiletries", "UnitCost":20,"InitialStock":50,"CurrentROB":50,"ConsumptionPerBooking":2,"ReorderThreshold":10,"LastCount":50,"PurchasesYTD":[]}, {"ItemID":"con-tissues-paper-towels","ItemName":"Tissues / Paper Towels","Category":"Guest Supplies", "UnitCost":20,"InitialStock":50,"CurrentROB":50,"ConsumptionPerBooking":2,"ReorderThreshold":10,"LastCount":50,"PurchasesYTD":[]} ],
+      purchases:[ 
+          { date:'2025-09-10', items:[{ itemId:'con-bottled-water', name:'Bottled Water', qty:24, unitCost:20, cost:480, source:'SM' }] }, 
+          { date:'2025-09-15', items:[{ itemId:'con-3-in-1-coffee', name:'3-in-1 Coffee', qty:50, unitCost:18.5, cost:925, source:'KCC' }] }, 
+          { date:'2025-10-02', items:[{ itemId:'con-bottled-water', name:'Bottled Water', qty:24, unitCost:19.5, cost:468, source:'Robinsons' }] }, 
+          { date:'2025-10-05', items:[{ itemId:'con-3-in-1-coffee', name:'3-in-1 Coffee', qty:50, unitCost:18.2, cost:910, source:'SM' }] },
+          { date:'2025-10-06', items:[{ itemId:'con-tea', name:'Tea', qty:100, unitCost:15.5, cost:1550, source:'SM' }, { itemId:'con-shampoo-palmolive-', name:'Shampoo (Palmolive)', qty:20, unitCost:6.0, cost:120, source:'KCC' }] } 
+      ]
+    }); };
+    window.__demoReport = function(){ return ({ bookingCount:12, staysInPeriod: 12, guestNightsInPeriod: 30, beginningInv: 4500, endingInv: 3800, linensReplaced: 5, totalLinens: 50, stockoutIncidents: 1, lostInventoryCost: 250, totalInventoryCost: 8000 }); };
+
+    var state = { settings:{}, users:[], editLog:[], currentUser: null, settingsAuthed: false, authAction: null, charts:{}, touchStartX: 0, currentViewIndex: 0, sortableInstances: [] };
+    const VIEWS = ['dashboard', 'inventory', 'consumables', 'purchases', 'analytics', 'settings'];
+    const CHART_COLORS = ['#345c51', '#8C6D46', '#D97706', '#B91C1C', '#6d28d9', '#db2777', '#0e7490'];
+
+    document.addEventListener('DOMContentLoaded', function(){
+      var tabs=document.querySelectorAll('.navtab');
+      for(var i=0;i<tabs.length;i++){ (function(b){ b.addEventListener('click', function(){ if (b.dataset.view === 'settings') { requestSettingsAccess(); } else { switchView(b.dataset.view); } }) })(tabs[i]) }
+      gid('btn-metric-attention').addEventListener('click', onAttentionClick);
+      gid('btn-auth-inv').addEventListener('click', toggleAuth);
+      gid('btn-auth-con').addEventListener('click', toggleAuth);
+      gid('auth-close').addEventListener('click', closeAuth);
+      gid('auth-form').addEventListener('submit', onAuthSubmit);
+      gid('form-settings').addEventListener('submit', onSettingsSave);
+      gid('form-add-user').addEventListener('submit', onUserAdd);
+      gid('btn-add-inventory').addEventListener('click', function() { openAddItemModal('inventory'); });
+      gid('btn-add-consumable').addEventListener('click', function() { openAddItemModal('consumable'); });
+      gid('add-item-close').addEventListener('click', closeAddItemModal);
+      gid('add-item-form').addEventListener('submit', onSaveItem);
+      gid('add-purchase-row').addEventListener('click', addPurchaseRow);
+      gid('purchase-form').addEventListener('submit', onSavePurchaseBatch);
+      gid('btn-drive-sync').addEventListener('click', onDriveSync);
+      gid('toggle-inactivity-alert').addEventListener('change', onAutomationSettingChange);
+      gid('set-email').addEventListener('change', onAutomationSettingChange);
+      var main = gid('main-content');
+      main.addEventListener('touchstart', handleTouchStart, false);
+      main.addEventListener('touchmove', handleTouchMove, false);
+      load();
+    });
+
+    function load(){
+      showLoader(true);
+      if (hasRunApi()) {
+        google.script.run.withSuccessHandler(initFromServer).withFailureHandler(initFromDemo).getInitialData();
+      } else { initFromDemo(); }
+    }
+
+    function initFromServer(d){ 
+        state.settings=d.settings || {}; state.users=d.users || []; state.editLog=d.editLog || []; 
+        state.inventory=d.inventory || []; state.consumables=d.consumables || []; state.purchases=d.purchases || []; 
+        afterInit(); 
+    }
+    function initFromDemo(){ var d=window.__demoData(); state.settings=d.settings; state.users=d.users; state.editLog=d.editLog; state.inventory=d.inventory; state.consumables=d.consumables; state.purchases=d.purchases; afterInit(); }
+    function afterInit(){ 
+        renderAll(); 
+        addPurchaseRow(); 
+        if (hasRunApi()) {
+            google.script.run.withSuccessHandler(renderUpcomingBookings).withFailureHandler(err => renderUpcomingBookings({error: err})).getUpcomingBookings();
+        } else {
+            renderUpcomingBookings(window.google.script.run._ok); // Use the mock success handler
+        }
+        showLoader(false); 
+    }
+
+    function renderAll(){ 
+        renderDashboard(); renderInventory(); renderConsumables(); renderPurchases(); renderAnalytics(); renderSettings();
+    }
+    
+    function renderUpcomingBookings(bookings) {
+        const container = gid('upcoming');
+        if (!bookings || bookings.error) {
+            container.innerHTML = '<p class="text-xs text-red-600">Could not load bookings. Check Calendar ID and script permissions.</p>';
+            return;
+        }
+        if (bookings.length === 0) {
+            container.innerHTML = '<p class="text-sm text-bronze-800/70">No bookings in the next 7 days.</p>';
+            return;
+        }
+        container.innerHTML = bookings.map(b => {
+            const start = new Date(b.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            const end = new Date(b.end).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            return `<div class="p-2 bg-cream-100 rounded-md"><strong class="font-semibold text-bronze-800">${esc(b.title)}</strong><p class="text-xs text-bronze-700/80">${start} - ${end}</p></div>`;
+        }).join('');
+    }
+
+    function renderDashboard(){
+      var totalValue = state.consumables.reduce(function(a,c){ return a + (Number(c.UnitCost||0) * Number(c.InitialStock||0)); }, 0);
+      gid('metric-total-value').textContent = '₱'+totalValue.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      var projected = state.consumables.reduce(function(a,c){ return a + (Number(c.UnitCost||0) * Number(c.ConsumptionPerBooking||0) * 15); }, 0);
+      gid('metric-projected').textContent = '₱'+projected.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      var low = state.consumables.filter(function(c){ return Number(c.CurrentROB||0) <= Number(c.ReorderThreshold||0) });
+      var damaged = state.inventory.filter(function(i){ return (i.Status||'').toLowerCase()==='damaged' });
+      gid('metric-attention').textContent = (low.length + damaged.length);
+      var alerts = gid('alerts');
+      alerts.innerHTML = '';
+      if (!low.length && !damaged.length) {
+        alerts.innerHTML = '<p class="text-sm text-bronze-800/70">No immediate alerts. All stock levels are good.</p>';
+      }
+      low.forEach(function(c){ alerts.insertAdjacentHTML('beforeend', '<div class="border-l-4 border-[var(--warn)] bg-[#FFF7ED] p-3 rounded-md"><strong>Low Stock:</strong> '+esc(c.ItemName)+' — ROB '+Number(c.CurrentROB||0)+' (threshold '+Number(c.ReorderThreshold||0)+')</div>') });
+      damaged.forEach(function(i){ alerts.insertAdjacentHTML('beforeend', '<div class="border-l-4 border-[var(--danger)] bg-[#FEF2F2] p-3 rounded-md"><strong>Damaged:</strong> '+esc(i.ItemName)+'</div>') });
+    }
+
+    function onAttentionClick() {
+        var low = state.consumables.find(function(c){ return Number(c.CurrentROB||0) <= Number(c.ReorderThreshold||0) });
+        if (low) { switchView('consumables'); setTimeout(function() { highlightRow('consumable-row-'+low.ItemID); }, 100); return; }
+        var damaged = state.inventory.find(function(i){ return (i.Status||'').toLowerCase()==='damaged' });
+        if (damaged) { switchView('inventory'); setTimeout(function() { highlightRow('inv-row-'+damaged.ItemID); }, 100); return; }
+        toastDone('No items need attention.');
+    }
+
+    function renderInventory(){
+      var container = gid('inventory-container');
+      var q=(gid('inv-search').value||'').toLowerCase();
+      var sort=gid('inv-sort').value;
+      var freqRank = { '♻️ Frequent':0, '🗓️ Occasional':1, '🧱 Rare':2 };
+      var filtered = state.inventory.filter(function(it){ return (it.ItemName+' '+(it.Category||'')).toLowerCase().includes(q) });
+      var sorted = filtered.sort(function(a,b){ return sort==='alpha'? a.ItemName.localeCompare(b.ItemName) : ((freqRank[a.ReplaceFreq||'🗓️ Occasional']||1) - (freqRank[b.ReplaceFreq||'🗓️ Occasional']||1)) });
+      var grouped = sorted.reduce(function(acc, it) {
+          var cat = it.Category || 'Uncategorized';
+          if (!acc[cat]) acc[cat] = [];
+          acc[cat].push(it);
+          return acc;
+      }, {});
+      container.innerHTML = Object.keys(grouped).sort().map(function(category) {
+          var rows = grouped[category].map(function(it) {
+              return (
+                '<tr id="inv-row-'+it.ItemID+'" data-id="'+it.ItemID+'">'+
+                   '<td class="p-3 w-8">' + (state.currentUser ? '<div class="drag-handle text-center">☰</div>' : '') + '</td>' +
+                  '<td class="p-3">'+esc(it.ItemName)+'</td>'+
+                  '<td class="p-3 text-center">'+(state.currentUser? ('<input type="number" min="0" value="'+Number(it.Quantity||0)+'" data-id="'+it.ItemID+'" data-field="Quantity" data-old-value="'+it.Quantity+'" class="edit-input w-20 p-1 border border-taupe-300 rounded-md text-right bg-white/50" />') : Number(it.Quantity||0))+'</td>'+
+                  '<td class="p-3 text-center">'+esc(it.ReplaceFreq||'🗓️ Occasional')+'</td>'+
+                  '<td class="p-3 text-right">'+
+                    (state.currentUser ? '<select data-id="'+it.ItemID+'" data-field="Status" data-old-value="'+it.Status+'" class="edit-input border border-taupe-300 rounded-md p-1 bg-white/80"><option '+(it.Status==='Good'?'selected':'')+'>Good</option><option '+(it.Status==='Damaged'?'selected':'')+'>Damaged</option><option '+(it.Status==='Missing'?'selected':'')+'>Missing</option></select>' : it.Status )+
+                  '</td>'+
+                   '<td class="p-3 text-center">' + (state.currentUser ? '<button data-id="'+it.ItemID+'" data-type="inventory" class="remove-item-btn text-red-600 hover:text-red-800 text-lg transition-colors">✖</button>' : '') + '</td>'+
+                '</tr>');
+          }).join('');
+          return ('<div class="bg-cream-50 border border-taupe-300 rounded-xl shadow-soft"><h3 class="p-3 text-lg font-cormorant font-bold text-bronze-800 border-b border-taupe-300/80">'+esc(category)+'</h3><div class="overflow-x-auto"><table class="tbl w-full text-sm"><thead><tr><th class="p-3 w-8"></th><th class="p-3 text-left">Item</th><th class="p-3 text-center">Qty</th><th class="p-3 text-center">Replacement Freq</th><th class="p-3 text-right">Status</th><th class="p-3 text-center w-12"></th></tr></thead><tbody class="sortable-inv-body">'+rows+'</tbody></table></div></div>');
+      }).join('') || '<p>No items found.</p>';
+      
+      var editInputs = container.querySelectorAll('.edit-input');
+      for(var i = 0; i < editInputs.length; i++) { editInputs[i].addEventListener('change', onItemFieldChange); }
+      var removeBtns = container.querySelectorAll('.remove-item-btn');
+      for(var j = 0; j < removeBtns.length; j++) { removeBtns[j].addEventListener('click', onRemoveItem); }
+      initSortable();
+    }
+    
+    function renderConsumables(){
+      var body=gid('consumables-body');
+      body.innerHTML = state.consumables.map(function(c){
+        var calc = calcROB(c); var delta = Number(c.CurrentROB||0) - calc;
+        var status = (Number(c.CurrentROB||0) <= Number(c.ReorderThreshold||0)) ? (Number(c.CurrentROB||0)===0? 'Resupply Needed':'Low Stock') : 'OK';
+        var chip = status==='OK'? 'chip chip-ok' : (status==='Low Stock'? 'chip chip-low':'chip chip-need');
+        var lastShown = Number(nvl(c.LastCount, c.CurrentROB, 0));
+        return (
+          '<tr id="consumable-row-'+c.ItemID+'" data-id="'+c.ItemID+'">'+
+             '<td class="p-3 w-8">' + (state.currentUser ? '<div class="drag-handle text-center">☰</div>' : '') + '</td>' +
+            '<td class="p-3">'+esc(c.ItemName)+'</td>'+
+            '<td class="p-3 text-right">'+(state.currentUser? ('<input type="number" step="0.01" min="0" value="'+Number(c.UnitCost||0).toFixed(2)+'" data-id="'+c.ItemID+'" data-field="UnitCost" data-old-value="'+c.UnitCost+'" class="edit-input w-24 p-1 border border-taupe-300 rounded-md text-right bg-white/50" />') : Number(c.UnitCost||0).toFixed(2))+'</td>'+
+            '<td class="p-3 text-center">'+(state.currentUser? ('<input type="number" min="0" value="'+lastShown+'" data-id="'+c.ItemID+'" data-field="LastCount" data-old-value="'+c.LastCount+'" class="edit-input w-24 p-1 border border-taupe-300 rounded-md text-right bg-white/50" />') : lastShown)+'</td>'+
+            '<td class="p-3 text-center">'+(state.currentUser? ('<input type="number" min="0" value="'+Number(c.ReorderThreshold||0)+'" data-id="'+c.ItemID+'" data-field="ReorderThreshold" data-old-value="'+c.ReorderThreshold+'" class="edit-input w-24 p-1 border border-taupe-300 rounded-md text-right bg-white/50" />') : Number(c.ReorderThreshold||0))+'</td>'+
+            '<td class="p-3 text-center">'+Number(c.CurrentROB||0)+'</td>'+
+            '<td class="p-3 text-center">'+calc+'</td>'+
+            '<td class="p-3 text-center '+(delta? 'font-semibold text-[var(--danger)]':'')+'">'+delta+'</td>'+
+            '<td class="p-3 text-center"><span class="'+chip+'">'+status+'</span></td>'+
+            '<td class="p-3 text-center">' + (state.currentUser ? '<button data-id="'+c.ItemID+'" data-type="consumable" class="remove-item-btn text-red-600 hover:text-red-800 text-lg transition-colors">✖</button>' : '') + '</td>'+
+          '</tr>');
+      }).join('') || '<tr><td class="p-3 text-sm" colspan="10">No consumables yet.</td></tr>';
+
+      if(state.currentUser){
+        var inputs = body.querySelectorAll('.edit-input');
+        for (var i = 0; i < inputs.length; i++) { inputs[i].addEventListener('change', onItemFieldChange); }
+        var removeBtns = body.querySelectorAll('.remove-item-btn');
+        for (var j = 0; j < removeBtns.length; j++) { removeBtns[j].addEventListener('click', onRemoveItem); }
+      }
+      initSortable();
+    }
+    
+    function calcROB(c){
+      var initial = Number(c.InitialStock||0); var purchases = (c.PurchasesYTD||[]).reduce(function(a,p){ return a + Number(p.qty||0) }, 0);
+      var logged = Number(c.LoggedConsumption||0); return initial + purchases - logged;
+    }
+    
+    function onItemFieldChange(e) {
+        var id = e.target.dataset.id; var field = e.target.dataset.field; var oldValue = e.target.dataset.oldValue;
+        var newValue = e.target.value; var isConsumable = id.startsWith('con-');
+        var itemArr = isConsumable ? state.consumables : state.inventory;
+        var item = findById(itemArr, id, 'ItemID');
+        if (!item || oldValue == newValue) return;
+        var patch = {}; patch[field] = (e.target.type === 'number') ? Number(newValue) : newValue;
+        if (isConsumable && field === 'LastCount') { patch.CurrentROB = Number(newValue); }
+        var changeDesc = field + ' changed from "' + oldValue + '" to "' + newValue + '"';
+        logEdit(item.ItemName, changeDesc);
+        Object.assign(item, patch);
+        upsertItem(item, isConsumable ? 'consumable' : 'inventory');
+    }
+
+    function onSaveItem(e) {
+        e.preventDefault();
+        var form = e.target; var type = form.dataset.type; var isConsumable = type === 'consumable';
+        var itemData = {};
+        var fields = isConsumable ? ['ItemName', 'Category', 'UnitCost', 'InitialStock', 'ConsumptionPerBooking', 'ReorderThreshold'] : ['ItemName', 'Category', 'Quantity', 'ReplaceFreq', 'Status'];
+        fields.forEach(function(field) { itemData[field] = form.elements[field].value; });
+        itemData.ItemID = (isConsumable ? 'con-' : 'inv-') + itemData.ItemName.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Date.now().toString().slice(-4);
+        if (isConsumable) { itemData.CurrentROB = itemData.InitialStock; itemData.LastCount = itemData.InitialStock; }
+        var logDesc = 'New ' + type + ' added: ' + itemData.ItemName;
+        logEdit(itemData.ItemName, logDesc);
+        upsertItem(itemData, type, true);
+        closeAddItemModal();
+    }
+
+    function onRemoveItem(e) {
+        var id = e.target.dataset.id; var type = e.target.dataset.type; var isConsumable = type === 'consumable';
+        var itemArr = isConsumable ? state.consumables : state.inventory;
+        var item = findById(itemArr, id, 'ItemID');
+        if (!item) return;
+        if (confirm('Are you sure you want to remove "' + item.ItemName + '"? This cannot be undone.')) {
+            if (isConsumable) { state.consumables = state.consumables.filter(function(i) { return i.ItemID !== id; }); }
+            else { state.inventory = state.inventory.filter(function(i) { return i.ItemID !== id; }); }
+            var logDesc = type.charAt(0).toUpperCase() + type.slice(1) + ' removed: ' + item.ItemName;
+            logEdit(item.ItemName, logDesc);
+            if(hasRunApi()) { google.script.run.withFailureHandler(function(){ toastError('Failed to remove') }).removeItem(id, type); }
+            renderAll();
+            toastDone('Item removed');
+        }
+    }
+    
+    function upsertItem(item, type, isNew) {
+        if(hasRunApi()) {
+            google.script.run.withSuccessHandler(function(savedItem){
+                if (isNew) { if (type === 'consumable') state.consumables.push(savedItem); else state.inventory.push(savedItem); }
+                renderAll(); toastDone('Item ' + (isNew ? 'added' : 'updated'));
+            }).withFailureHandler(function() { toastError('Save failed'); }).upsertItem(item, type);
+        } else {
+            if (isNew) { if (type === 'consumable') state.consumables.push(item); else state.inventory.push(item); }
+            renderAll(); toastDone('Saved (local)');
+        }
+    }
+
+    function addPurchaseRow(){
+      var wrap=gid('purchase-rows');
+      var row=document.createElement('div'); row.className='prow grid grid-cols-1 md:grid-cols-6 gap-3 items-end p-2 border border-taupe-200 rounded-md';
+      row.innerHTML=
+        '<div class="md:col-span-2">'+
+          '<label class="text-xs">Item</label>'+
+          '<select class="p-item w-full p-2 border border-taupe-300 rounded-md" required>'+
+            '<option value="">Select…</option>'+ state.consumables.map(function(c){ return '<option value="'+c.ItemID+'">'+esc(c.ItemName)+'</option>' }).join('')+
+          '</select>'+
+        '</div>'+
+        '<div><label class="text-xs">Bundles</label><input type="number" min="0" class="p-bundles w-full p-2 border border-taupe-300 rounded-md" /></div>'+
+        '<div><label class="text-xs">Units/Bundle</label><input type="number" min="0" class="p-units w-full p-2 border border-taupe-300 rounded-md" value="1" /></div>'+
+        '<div><label class="text-xs">Total Cost ₱</label><input type="number" min="0" step="0.01" class="p-cost w-full p-2 border border-taupe-300 rounded-md" /></div>'+
+        '<div><label class="text-xs">Supplier</label><select class="p-source w-full p-2 border border-taupe-300 rounded-md"><option>Online — Shopee</option><option>Online — TikTok</option><option>KCC</option><option>Robinsons</option><option>SM</option><option>Gaisano</option><option>Others</option></select></div>';
+      wrap.appendChild(row);
+    }
+
+    function onSavePurchaseBatch(e){ e.preventDefault();
+      var date=gid('purchase-date').value;
+      var items = [].map.call(document.querySelectorAll('#purchase-rows .prow'), function(r){
+        var itemId=r.querySelector('.p-item').value; var bundles=Number(r.querySelector('.p-bundles').value||0); var unitsPer=Number(r.querySelector('.p-units').value||1);
+        var cost=Number(r.querySelector('.p-cost').value||0); var source=r.querySelector('.p-source').value;
+        var qty = bundles*unitsPer; var unitCost = qty > 0 ? cost/qty : 0;
+        return itemId ? { itemId:itemId, name: findById(state.consumables, itemId, 'ItemID').ItemName, qty:qty, cost:cost, unitCost: unitCost, source:source } : null;
+      }).filter(Boolean);
+      if(!date || !items.length) return toastError('Add at least one row and date');
+      var payload={ date:date, items:items };
+      if(hasRunApi()){ google.script.run.withSuccessHandler(function(batch){ applyPurchaseBatch(batch); toastDone('Saved'); gid('purchase-rows').innerHTML=''; addPurchaseRow(); }).withFailureHandler(function(){ toastError('Failed') }).recordPurchaseBatch(payload); }
+      else { applyPurchaseBatch(payload); toastDone('Saved (local)'); gid('purchase-rows').innerHTML=''; addPurchaseRow(); }
+    }
+
+    function applyPurchaseBatch(batch){
+      state.purchases.unshift(batch);
+      (batch.items||[]).forEach(function(it){
+        var c=findById(state.consumables,it.itemId,'ItemID');
+        if(c){ c.CurrentROB = Number(c.CurrentROB||0) + Number(it.qty||0); c.PurchasesYTD = c.PurchasesYTD || []; c.PurchasesYTD.push({ date:batch.date, qty:it.qty, cost:it.cost }); }
+      });
+      renderAll();
+    }
+
+    function renderPurchases(){
+      var log=gid('purchases-log');
+      log.innerHTML = state.purchases.length? state.purchases.map(function(p){ 
+          var date = new Date(p.date).toLocaleDateString();
+          var itemsHtml = (p.items||[]).map(function(it) {
+             return '<div class="text-sm">'+esc(it.name)+': '+it.qty+' units @ ₱'+it.unitCost.toFixed(2)+' ea. from '+esc(it.source)+' (Total: ₱'+it.cost.toFixed(2)+')</div>';
+          }).join('');
+          return '<div class="p-3 rounded-md bg-white/80 border border-taupe-300"><div class="font-semibold">'+date+'</div>'+itemsHtml+'</div>';
+      }).join('') : '<p class="text-sm text-bronze-800/70">No purchases yet.</p>';
+    }
+    
+    function renderAnalytics() {
+        var demoReport = window.__demoReport();
+        var purchases = state.purchases.flatMap(p => p.items.map(i => ({date: p.date, ...i})));
+        var costPerStay = (demoReport.beginningInv + purchases.reduce((a, p) => a + p.cost, 0) - demoReport.endingInv) / demoReport.staysInPeriod;
+        var kpis = [
+            { label: 'Cost of Consumables Per Stay', value: '₱' + costPerStay.toFixed(2), explanation: 'The direct cost of all disposable items a guest uses during their stay. Formula: (Beginning Inventory + Purchases - Ending Inventory) / Number of Stays. This figure means each booking costs you this much in supplies.' },
+            { label: 'Linen Turnover Rate', value: ((demoReport.linensReplaced / demoReport.totalLinens) * 100).toFixed(1) + '%', explanation: 'How many times you replace linens/towels over a year due to wear. Formula: (Linens Replaced / Total Linens) * 100. A lower percentage is better, indicating more durable items.' },
+            { label: 'Stockout Frequency', value: demoReport.stockoutIncidents, explanation: 'How often you ran out of an essential item. This is a simple count. This should be zero to ensure a 5-star guest experience.' },
+            { label: 'Wastage & Shrinkage Rate', value: ((demoReport.lostInventoryCost / demoReport.totalInventoryCost) * 100).toFixed(1) + '%', explanation: 'The percentage of inventory lost, damaged, or expired. Formula: (Cost of Lost Inventory / Total Inventory Cost) * 100. This tracks hidden costs eating into profit.' },
+        ];
+        gid('kpi-container').innerHTML = kpis.map(kpi => '<div class="bg-cream-100 p-4 rounded-lg shadow-sm"><p class="text-sm text-bronze-700/80">'+kpi.label+'</p><p class="text-2xl font-bold text-bronze-800">'+kpi.value+'</p><p class="text-xs text-bronze-800/70 mt-1">'+kpi.explanation+'</p></div>').join('');
+
+        var latestCosts = state.consumables.map(c => {
+            var itemPurchases = purchases.filter(p => p.name === c.ItemName).sort((a,b) => new Date(b.date) - new Date(a.date));
+            return { name: c.ItemName, cost: itemPurchases.length > 0 ? itemPurchases[0].unitCost : c.UnitCost };
+        });
+        var ctxLatest = gid('chart-latest-cost');
+        if (state.charts.latest) state.charts.latest.destroy();
+        state.charts.latest = new Chart(ctxLatest, { type: 'bar', data: { labels: latestCosts.map(i => i.name), datasets: [{ label: 'Latest Unit Cost (₱)', data: latestCosts.map(i => i.cost), backgroundColor: CHART_COLORS }] }, options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y' } });
+
+        var supplierData = purchases.reduce((acc, p) => { acc[p.name] = acc[p.name] || {}; acc[p.name][p.source] = acc[p.name][p.source] || []; acc[p.name][p.source].push(p.unitCost); return acc; }, {});
+        var uniqueSuppliers = [...new Set(purchases.map(p => p.source))];
+        var supplierChartData = {
+            labels: Object.keys(supplierData),
+            datasets: uniqueSuppliers.map((source, i) => ({
+                label: source,
+                data: Object.keys(supplierData).map(itemName => {
+                    if (supplierData[itemName][source]) {
+                        return supplierData[itemName][source].reduce((a,c)=>a+c,0) / supplierData[itemName][source].length;
+                    }
+                    return null;
+                }),
+                backgroundColor: CHART_COLORS[i % CHART_COLORS.length],
+            }))
+        };
+        var ctxSupplier = gid('chart-supplier-comparison');
+        if (state.charts.supplier) state.charts.supplier.destroy();
+        state.charts.supplier = new Chart(ctxSupplier, { type: 'bar', data: supplierChartData, options: { responsive: true, maintainAspectRatio: false, scales: { x: { stacked: false }, y: { stacked: false } } }});
+        
+        var ctxStock = gid('chart-stock-levels');
+        if (state.charts.stock) state.charts.stock.destroy();
+        var stockData = state.consumables.sort((a,b) => (a.CurrentROB / a.ReorderThreshold) - (b.CurrentROB / b.ReorderThreshold));
+        state.charts.stock = new Chart(ctxStock, { type: 'bar', data: { labels: stockData.map(c => c.ItemName), datasets: [ { label: 'Current ROB', data: stockData.map(c => c.CurrentROB), backgroundColor: '#8C6D46' }, { label: 'Reorder Threshold', data: stockData.map(c => c.ReorderThreshold), backgroundColor: '#E4D9C9' } ] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
+    }
+    
+    function renderSettings() {
+        gid('set-sheet').value = state.settings.SPREADSHEET_ID || '';
+        gid('set-cal').value = state.settings.CALENDAR_ID || '';
+        gid('set-ocr').value = state.settings.OCR_KEY || '';
+        gid('set-email').value = state.settings.NOTIFICATION_EMAIL || '';
+        gid('toggle-inactivity-alert').checked = !!state.settings.AUTOMATION_INACTIVITY_ALERT;
+        renderUsers(); renderEditLog();
+    }
+    
+    function renderUsers() {
+        var list = gid('user-list');
+        list.innerHTML = state.users.map(function(user) { return '<div class="flex items-center justify-between p-2 bg-white/50 rounded-md"><span>'+esc(user)+'</span><button data-user="'+esc(user)+'" class="remove-user-btn text-red-600 hover:text-red-800 text-sm">Remove</button></div>'; }).join('');
+        list.querySelectorAll('.remove-user-btn').forEach(b => b.addEventListener('click', onUserRemove));
+    }
+    
+    function renderEditLog() {
+        var body = gid('edit-log-body');
+        body.innerHTML = state.editLog.map(log => '<tr><td class="p-2">'+new Date(log.ts).toLocaleString()+'</td><td class="p-2">'+esc(log.user)+'</td><td class="p-2">'+esc(log.item)+'</td><td class="p-2">'+esc(log.change)+'</td></tr>').join('');
+    }
+
+    function onSettingsSave(e){ 
+      e.preventDefault(); 
+      var s={ 
+          SPREADSHEET_ID:gid('set-sheet').value.trim(), 
+          CALENDAR_ID:gid('set-cal').value.trim(),
+          OCR_KEY: gid('set-ocr').value.trim()
+      }; 
+      if(!s.SPREADSHEET_ID||!s.CALENDAR_ID) return toastError('Fill required fields'); 
+      if(hasRunApi()){ google.script.run.withSuccessHandler(function(v){ Object.assign(state.settings, v); toastDone('Settings saved'); }).withFailureHandler(function(){ toastError('Save failed') }).saveSettings(s); }
+      else { Object.assign(state.settings, s); toastDone('Settings saved (local)'); }
+    }
+    
+    function onAutomationSettingChange() {
+        var settings = {
+            NOTIFICATION_EMAIL: gid('set-email').value,
+            AUTOMATION_INACTIVITY_ALERT: gid('toggle-inactivity-alert').checked
+        };
+        if(hasRunApi()){ google.script.run.withSuccessHandler(function(s){ Object.assign(state.settings, s); toastDone('Automation settings saved'); }).withFailureHandler(function(){ toastError('Save failed'); }).saveAutomationSettings(settings); }
+        else { Object.assign(state.settings, settings); toastDone('Saved (local)'); }
+    }
+    
+    function onDriveSync(e) {
+        var btn = e.target;
+        var statusEl = gid('drive-sync-status');
+        btn.disabled = true;
+        statusEl.textContent = 'Syncing...';
+        if (hasRunApi()) {
+            google.script.run.withSuccessHandler(function(msg){
+                statusEl.textContent = msg + ' at ' + new Date().toLocaleTimeString();
+                btn.disabled = false;
+            }).withFailureHandler(function(){
+                 statusEl.textContent = 'Sync failed.';
+                 btn.disabled = false;
+            }).triggerDriveSync();
+        } else {
+            setTimeout(function() {
+                statusEl.textContent = 'Synced (local) at ' + new Date().toLocaleTimeString();
+                btn.disabled = false;
+            }, 1500);
+        }
+    }
+
+    function onUserAdd(e) {
+        e.preventDefault();
+        var input = gid('new-user-name'); var newUser = input.value.trim();
+        if (newUser && state.users.indexOf(newUser) === -1) { state.users.push(newUser); updateUsersInBackend(); input.value = ''; }
+    }
+
+    function onUserRemove(e) {
+        var userToRemove = e.target.dataset.user;
+        state.users = state.users.filter(function(u){ return u !== userToRemove; });
+        updateUsersInBackend();
+    }
+
+    function updateUsersInBackend() {
+        renderUsers();
+        if (hasRunApi()) { google.script.run.withFailureHandler(function(){ toastError('User update failed')}).updateUsers(state.users); }
+    }
+    
+    function logEdit(item, change) {
+        var logEntry = { ts: new Date().toISOString(), user: state.currentUser, item: item, change: change };
+        state.editLog.unshift(logEntry); renderEditLog();
+        if(hasRunApi()) { google.script.run.withFailureHandler(function(){ toastError('Log failed')}).logEdit(logEntry); }
+    }
+
+    function openAuth(action, title){ 
+        state.authAction = action; var userSelect = gid('auth-user');
+        userSelect.innerHTML = state.users.map(u => '<option>'+esc(u)+'</option>').join('');
+        gid('auth-title').textContent = title || '🔐 Enter Credentials';
+        gid('auth-password-field').classList.toggle('hidden', action !== 'accessSettings');
+        var dlg=gid('auth-modal'); 
+        if(dlg && dlg.showModal) { dlg.showModal(); setTimeout(function(){ userSelect.focus() },10) } 
+    }
+    function closeAuth(){ var dlg=gid('auth-modal'); if(dlg && dlg.close) { dlg.close(); state.authAction = null; gid('auth-password').value = ''; } }
+    function onAuthSubmit(e){ 
+        e.preventDefault(); 
+        var user = gid('auth-user').value;
+        if (!user) return toastError('Please select a user'); 
+        if (state.authAction === 'accessSettings') {
+            var pass = gid('auth-password').value;
+            if (pass === 'cascadeadmin888') { handleAuthSuccess(user); }
+            else { toastError('Invalid Admin Password'); }
+        } else {
+            handleAuthSuccess(user);
+        }
+    }
+    
+    function handleAuthSuccess(user) {
+        if (state.authAction === 'accessSettings') { state.settingsAuthed = true; toastDone('Settings Unlocked'); switchView('settings'); }
+        else if (state.authAction === 'editItems') { state.currentUser = user; updateAuthButton(); toastDone('Editing as ' + user); renderInventory(); renderConsumables(); }
+        closeAuth();
+    }
+    
+    function toggleAuth() {
+        if (state.currentUser) { state.currentUser = null; updateAuthButton(); renderInventory(); renderConsumables(); toastDone('Editing Locked'); }
+        else { openAuth('editItems', '🔐 Unlock Item Editing'); }
+    }
+
+    function updateAuthButton() {
+        var btnInv = gid('btn-auth-inv'); var btnCon = gid('btn-auth-con'); var editorStatus = gid('editor-status');
+        if (state.currentUser) {
+            btnInv.innerHTML = '🔓 Lock Edit'; btnCon.innerHTML = '🔓 Lock Edit'; btnInv.classList.add('bg-amber-200');
+            btnCon.classList.add('bg-amber-200'); editorStatus.innerHTML = 'Editing as: <span class="font-bold text-forest-600">'+esc(state.currentUser)+'</span>';
+            editorStatus.classList.remove('hidden'); editorStatus.classList.add('flex');
+        } else {
+            btnInv.innerHTML = '🔒 Unlock Edit'; btnCon.innerHTML = '🔒 Unlock Edit'; btnInv.classList.remove('bg-amber-200');
+            btnCon.classList.remove('bg-amber-200'); editorStatus.classList.add('hidden'); editorStatus.classList.remove('flex');
+        }
+    }
+    
+    function requestSettingsAccess() { if (state.settingsAuthed) { switchView('settings'); } else { openAuth('accessSettings', '🔑 Access Settings'); } }
+    
+    function openAddItemModal(type) {
+        var form = gid('add-item-form'); form.dataset.type = type; var title = gid('add-item-title');
+        var fieldsContainer = gid('add-item-fields');
+        var fieldsHtml = '';
+        if (type === 'consumable') {
+            title.textContent = '➕ Add New Consumable Item';
+            fieldsHtml = `<div class="grid grid-cols-2 gap-4"><div><label>Item Name</label><input name="ItemName" class="w-full p-2 border border-taupe-300 rounded-md" required /></div><div><label>Category</label><input name="Category" class="w-full p-2 border border-taupe-300 rounded-md" placeholder="e.g., Guest Supplies" /></div></div><div class="grid grid-cols-4 gap-4"><div><label>Unit Cost (₱)</label><input name="UnitCost" type="number" step="0.01" min="0" value="0" class="w-full p-2 border border-taupe-300 rounded-md" required /></div><div><label>Initial Stock</label><input name="InitialStock" type="number" min="0" value="0" class="w-full p-2 border border-taupe-300 rounded-md" required /></div><div><label>Avg. / Booking</label><input name="ConsumptionPerBooking" type="number" min="0" value="1" class="w-full p-2 border border-taupe-300 rounded-md" required /></div><div><label>Reorder Threshold</label><input name="ReorderThreshold" type="number" min="0" value="10" class="w-full p-2 border border-taupe-300 rounded-md" required /></div></div>`;
+        } else {
+            title.textContent = '➕ Add New Inventory Item';
+            fieldsHtml = `<div class="grid grid-cols-2 gap-4"><div><label>Item Name</label><input name="ItemName" class="w-full p-2 border border-taupe-300 rounded-md" required /></div><div><label>Category</label><input name="Category" class="w-full p-2 border border-taupe-300 rounded-md" placeholder="e.g., Living Area" /></div></div><div class="grid grid-cols-3 gap-4"><div><label>Quantity</label><input name="Quantity" type="number" min="0" value="1" class="w-full p-2 border border-taupe-300 rounded-md" required /></div><div><label>Replacement Freq.</label><select name="ReplaceFreq" class="w-full p-2 border border-taupe-300 rounded-md"><option>♻️ Frequent</option><option>🗓️ Occasional</option><option selected>🧱 Rare</option></select></div><div><label>Status</label><select name="Status" class="w-full p-2 border border-taupe-300 rounded-md"><option>Good</option><option>Damaged</option><option>Missing</option></select></div></div>`;
+        }
+        fieldsContainer.innerHTML = fieldsHtml;
+        var dlg = gid('add-item-modal'); if (dlg && dlg.showModal) dlg.showModal();
+    }
+    function closeAddItemModal() { var dlg = gid('add-item-modal'); if (dlg && dlg.close) { dlg.close(); gid('add-item-form').reset(); } }
+
+    function initSortable() {
+        state.sortableInstances.forEach(inst => inst.destroy());
+        state.sortableInstances = [];
+        if (state.currentUser) {
+            document.querySelectorAll('.sortable-inv-body, .sortable-con-body').forEach(body => {
+                var type = body.classList.contains('sortable-inv-body') ? 'inventory' : 'consumable';
+                state.sortableInstances.push(new Sortable(body, { animation: 150, ghostClass: 'sortable-ghost', handle: '.drag-handle', onEnd: onSortEnd(type) }));
+            });
+        }
+    }
+
+    function onSortEnd(type) {
+      return function(evt) {
+        var itemArr = type === 'inventory' ? state.inventory : state.consumables;
+        var element = itemArr.find(item => item.ItemID === evt.item.dataset.id);
+        var oldIndex = itemArr.indexOf(element);
+        itemArr.splice(oldIndex, 1);
+        itemArr.splice(evt.newIndex, 0, element);
+        var newOrder = itemArr.map(item => item.ItemID);
+        if (hasRunApi()) { google.script.run.withFailureHandler(() => toastError('Reorder failed')).updateOrder(type, newOrder); }
+        logEdit(element.ItemName, 'Reordered in list');
+        if (type === 'inventory') renderInventory(); else renderConsumables();
+      }
+    }
+
+    function handleTouchStart(evt) { state.touchStartX = evt.touches[0].clientX; }
+    function handleTouchMove(evt) {
+        if (!state.touchStartX) return;
+        var touchEndX = evt.touches[0].clientX; var diffX = state.touchStartX - touchEndX;
+        if (Math.abs(diffX) > 100) {
+            if (diffX > 0) { state.currentViewIndex = Math.min(VIEWS.length - 1, state.currentViewIndex + 1); }
+            else { state.currentViewIndex = Math.max(0, state.currentViewIndex - 1); }
+            var nextView = VIEWS[state.currentViewIndex];
+            if (nextView === 'settings') { requestSettingsAccess(); } else { switchView(nextView); }
+            state.touchStartX = 0;
+        }
+    }
+
+    function switchView(id){
+      state.currentViewIndex = VIEWS.indexOf(id);
+      var views=document.querySelectorAll('.view'); for(var i=0;i<views.length;i++){ views[i].classList.remove('active') }
+      var tgt=gid('view-'+id); if(tgt){ tgt.classList.add('active') }
+      var tabs=document.querySelectorAll('.navtab'); for(var j=0;j<tabs.length;j++){ var b=tabs[j]; b.classList.toggle('border-bronze-700', b.dataset.view===id); b.classList.toggle('border-transparent', b.dataset.view!==id); }
+      if (id !== 'settings') { state.settingsAuthed = false; }
+    }
+    
+    function showLoader(b){ var l=gid('loader'); l.classList.toggle('hidden', !b); l.classList.toggle('flex', b); }
+    function showToast(msg, cls){ var t=gid('toast'); t.className='fixed bottom-5 right-5 z-50 '+(cls||'bg-bronze-700')+' text-cream-50 px-4 py-2 rounded-lg shadow-soft opacity-100 transition-opacity duration-300'; t.textContent=msg; setTimeout(function(){ t.classList.remove('opacity-100'); t.classList.add('opacity-0'); }, 2200) }
+    function toastDone(msg){ showToast(msg, 'bg-bronze-700') }
+    function toastError(msg){ showToast(msg, 'bg-[var(--danger)]') }
+    function highlightRow(id) {
+        var row = gid(id);
+        if (row) { row.scrollIntoView({ behavior: 'smooth', block: 'center' }); row.classList.add('highlight-row'); setTimeout(function() { row.classList.remove('highlight-row'); }, 2000); }
+    }
+    function gid(id){ return document.getElementById(id) }
+    function esc(s){ return (s==null? '' : String(s)).replace(/[&<>"']/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[m]) }) }
+    function debounce(fn,ms){ var t; return function(){ var a=arguments; clearTimeout(t); t=setTimeout(function(){ fn.apply(null,a) }, ms) } }
+    function findById(arr, id, key){ var k=key||'id'; for(var i=0;i<arr.length;i++){ if(arr[i][k]===id) return arr[i] } return null }
+  </script>
+</body>
+</html>
