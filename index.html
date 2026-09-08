@@ -4214,10 +4214,21 @@ async function submitAuth() {
     const btn = $('auth-submit');
     if (btn) { btn.disabled = true; btn.textContent = 'Verifying…'; }
     let ok = false;
+    let throttled = false;
     try {
-      const { data, error } = await db.rpc('verify_admin_pin', { pin });
+      // K15 — the throttled two-argument overload, the same one the guest
+      // guide uses: 8 failed attempts per 15 minutes per hashed client, every
+      // attempt recorded in admin_auth_attempts. The old verify_admin_pin(pin)
+      // took the raw PIN with no rate limit at all, which left this gate
+      // brute-forceable from any browser. Same PIN, same
+      // app_settings.admin_pin_hash — only the throttle is new.
+      const { data, error } = await db.rpc('verify_admin_pin', {
+        p_code: pin,
+        p_client: (user || 'inventory') + '',
+      });
       if (error) throw error;
-      ok = data === true;
+      ok = data?.ok === true;
+      throttled = data?.throttled === true;
     } catch(e) {
       console.error('verify_admin_pin:', e);
       toast('Could not verify PIN — check connection', 'err');
@@ -4225,7 +4236,7 @@ async function submitAuth() {
     if (btn) { btn.disabled = false; btn.textContent = 'Unlock'; }
     if (!ok) {
       $('auth-pin-wrap').style.display = '';
-      toast('Incorrect PIN', 'err');
+      toast(throttled ? 'Too many attempts — wait 15 minutes' : 'Incorrect PIN', 'err');
       $('auth-pin').focus();
       return;
     }
