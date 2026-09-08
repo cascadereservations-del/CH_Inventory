@@ -1784,7 +1784,7 @@
   <form id="signin-form" class="modal" style="max-width:360px;width:100%">
     <div class="modal-hd"><span class="modal-title">Sign in once on this device</span></div>
     <div class="modal-body">
-      <div class="fg"><label class="fl" for="signin-email">E-mail</label><input class="inp inp-full" id="signin-email" type="email" autocomplete="username" required></div>
+      <div class="fg"><label class="fl" for="signin-email">Your name</label><input class="inp inp-full" id="signin-email" type="text" autocomplete="username" autocapitalize="none" placeholder="e.g. honey" required></div>
       <div class="fg"><label class="fl" for="signin-password">Password</label><input class="inp inp-full" id="signin-password" type="password" autocomplete="current-password" required></div>
       <p class="t-dim" style="font-size:.75rem;margin-top:.375rem">You stay signed in on this phone. Ask Lloyd for your login.</p>
       <p id="signin-error" style="color:#e66;font-size:.8rem;min-height:1em"></p>
@@ -1918,6 +1918,14 @@ function sbFire(query) { Promise.resolve(query).catch(() => {}); }
    localStorage and refreshes it silently. Only an explicit sign-out or an
    owner-side revocation ends it. */
 const PROPERTY_ID = '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd'; // Cascade Bria
+const STAFF_DOMAIN = 'staff.cascade.invalid';
+// Staff sign in with a name; the Auth account behind it is <slug>@staff.cascade.invalid.
+function staffLoginEmail(raw) {
+  const v = String(raw || '').trim();
+  if (v.includes('@')) return v.toLowerCase();
+  const slug = v.normalize('NFKD').replace(/[^ -]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '.').replace(/^\.+|\.+$/g, '');
+  return `${slug}@${STAFF_DOMAIN}`;
+}
 
 async function requireStaffSignIn() {
   const { data: { session } } = await db.auth.getSession();
@@ -1929,7 +1937,7 @@ async function requireStaffSignIn() {
       e.preventDefault();
       const btn = $('signin-submit'); btn.disabled = true; $('signin-error').textContent = '';
       const { error } = await db.auth.signInWithPassword({
-        email: $('signin-email').value.trim(), password: $('signin-password').value,
+        email: staffLoginEmail($('signin-email').value), password: $('signin-password').value,
       });
       $('signin-password').value = '';
       btn.disabled = false;
