@@ -1780,6 +1780,18 @@
 </div>
 
 <!-- Auth Modal -->
+<div id="signin-gate" hidden style="position:fixed;inset:0;z-index:9999;background:var(--bg,#111);display:flex;align-items:center;justify-content:center;padding:24px">
+  <form id="signin-form" class="modal" style="max-width:360px;width:100%">
+    <div class="modal-hd"><span class="modal-title">Sign in once on this device</span></div>
+    <div class="modal-body">
+      <div class="fg"><label class="fl" for="signin-email">E-mail</label><input class="inp inp-full" id="signin-email" type="email" autocomplete="username" required></div>
+      <div class="fg"><label class="fl" for="signin-password">Password</label><input class="inp inp-full" id="signin-password" type="password" autocomplete="current-password" required></div>
+      <p class="t-dim" style="font-size:.75rem;margin-top:.375rem">You stay signed in on this phone. Ask Lloyd for your login.</p>
+      <p id="signin-error" style="color:#e66;font-size:.8rem;min-height:1em"></p>
+      <button class="btn btn-primary" id="signin-submit" type="submit" style="width:100%">Sign in</button>
+    </div>
+  </form>
+</div>
 <div class="backdrop" id="auth-backdrop">
   <div class="modal" id="auth-modal" style="max-width:380px">
     <div class="modal-hd">
@@ -1900,6 +1912,37 @@ const db = createClient(
 // Supabase JS v2 query builders are PromiseLike (.then only), not full Promises.
 // sbFire() wraps any query builder in Promise.resolve() so .catch() works correctly.
 function sbFire(query) { Promise.resolve(query).catch(() => {}); }
+
+/* Module A (2026-09): every read/write is now a named staff session.
+   Sign-in happens once per device; supabase-js keeps the session in
+   localStorage and refreshes it silently. Only an explicit sign-out or an
+   owner-side revocation ends it. */
+const PROPERTY_ID = '6ae230f4-c189-4547-84b1-cb6e0b2cc9bd'; // Cascade Bria
+
+async function requireStaffSignIn() {
+  const { data: { session } } = await db.auth.getSession();
+  if (session) return true;
+  const gate = $('signin-gate');
+  gate.hidden = false;
+  return await new Promise(resolve => {
+    $('signin-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = $('signin-submit'); btn.disabled = true; $('signin-error').textContent = '';
+      const { error } = await db.auth.signInWithPassword({
+        email: $('signin-email').value.trim(), password: $('signin-password').value,
+      });
+      $('signin-password').value = '';
+      btn.disabled = false;
+      if (error) { $('signin-error').textContent = error.message || 'Sign-in failed'; return; }
+      gate.hidden = true; resolve(true);
+    });
+  });
+}
+
+async function staffSignOut() {
+  await db.auth.signOut();
+  location.reload();
+}
 
 /* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
    State
@@ -3225,25 +3268,20 @@ async function saveSession() {
   $('session-submit').disabled = true;
 
   try {
-    // Update qty_on_hand for each used item
+    // Module A: one attributed RPC records usage and decrements stock in a
+    // single transaction under the caller's staff role (cleaner or above).
+    const { error: usageErr } = await db.rpc('record_inventory_usage', {
+      p_property_id:  PROPERTY_ID,
+      p_session_date: date,
+      p_logged_by:    user,
+      p_notes:        notes || null,
+      p_rows:         usedItems.map(([item_id, used_qty]) => ({ item_id, used_qty })),
+    });
+    if (usageErr) throw usageErr;
     for (const [id, usedQty] of usedItems) {
       const c = S.consumables.find(x => x.id === id);
-      if (!c) continue;
-      const newQty = Math.max(0, +(c.qty_on_hand||0) - usedQty);
-      const { error } = await db.from('inventory_items').update({ qty_on_hand: newQty }).eq('id', id);
-      if (error) throw error;
-      c.qty_on_hand = newQty;
+      if (c) c.qty_on_hand = Math.max(0, +(c.qty_on_hand||0) - usedQty);
     }
-
-    // Log usage to inventory_usage (failures now surface — table is provisioned)
-    const usageRows = usedItems.map(([item_id, used_qty]) => ({
-      item_id, used_qty,
-      session_date: date,
-      logged_by: user,
-      notes: notes || null,
-    }));
-    const { error: usageErr } = await db.from('inventory_usage').insert(usageRows);
-    if (usageErr) throw usageErr;
 
     toast(`Session saved — ${usedItems.length} item${usedItems.length!==1?'s':''} updated`, 'ok');
     closeBackdrop('session-backdrop');
@@ -4079,6 +4117,7 @@ async function saveItem() {
     if (id) {
       res = await db.from('inventory_items').update(row).eq('id',id).select().single();
     } else {
+      row.property_id = PROPERTY_ID;
       res = await db.from('inventory_items').insert(row).select().single();
     }
     if (res.error) throw res.error;
@@ -4846,7 +4885,7 @@ document.addEventListener('DOMContentLoaded', () => {
   addPurRow();
 
   // Load data
-  loadAll().then(initReveal);
+  requireStaffSignIn().then(ok => { if (ok) loadAll().then(initReveal); });
 });
 </script>
 </body>
