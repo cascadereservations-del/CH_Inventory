@@ -3780,7 +3780,7 @@ async function openAuditLog() {
   // Service Worker via blob URL
   if ('serviceWorker' in navigator) {
     const swCode = `
-const CACHE = 'ch-inventory-v6.4';
+const CACHE = 'ch-inventory-v6.5-auth';
 const SUPABASE_HOST = 'qkgfhsdppslwunarczeq.supabase.co';
 self.addEventListener('install', e => self.skipWaiting());
 self.addEventListener('activate', e => {
